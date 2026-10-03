@@ -1,9 +1,17 @@
 import { MODULE_BY_KEY } from '@/data/modules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
+import { recordApprovalBaseline } from './plan-snapshot'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
 const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚']
+
+function todayText(): string {
+  const now = new Date()
+  const month = `${now.getMonth() + 1}`.padStart(2, '0')
+  const day = `${now.getDate()}`.padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}
 
 export function moduleMeta(key: string): ModuleMeta {
   const meta = MODULE_BY_KEY.get(key)
@@ -50,9 +58,23 @@ export function runAction(key: string, id: number, action: string): ActionResult
     pending: target !== lastStatus,
     abnormal: NEGATIVE_ACTIONS.some((verb) => action.startsWith(verb)),
   }
+  // 批准测报方案时补登记批准日期，并顺手写一条批准基线快照，供日后核对与回放。
+  if (key === 'plan' && target === '已批准') {
+    if (!String(updated['批准日期'] ?? '').trim()) {
+      updated['批准日期'] = todayText()
+    }
+  }
   const next = [...rows]
   next[index] = updated
   saveRows(key, next)
+  if (key === 'plan' && target === '已批准') {
+    // 基线快照留痕失败不阻断审批本身（方案状态已先落盘），列表页打开时还会再补全。
+    try {
+      recordApprovalBaseline(updated)
+    } catch {
+      // 忽略留痕失败，ensureLegacySnapshots 会在读取快照时按批准日期补回。
+    }
+  }
   return { ok: true, message: `${meta.entity}已${action}，当前状态「${target}」` }
 }
 

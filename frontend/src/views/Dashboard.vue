@@ -28,6 +28,31 @@
         </tr>
       </tbody>
     </table>
+
+    <h3 class="audit-title">巡检清单按测报方案快照核对</h3>
+    <table class="data-table">
+      <thead>
+        <tr><th>方案编号</th><th>最新快照时间</th><th>被修改</th><th>已缺失</th><th>额外新增</th><th>核对结论</th></tr>
+      </thead>
+      <tbody>
+        <tr v-for="item in auditItems" :key="item.planId">
+          <td>{{ item.planCode }} {{ item.planName }}</td>
+          <td>{{ item.snapshotTime }}</td>
+          <td :class="item.changed.length ? 'audit-bad' : ''">{{ item.changed.length }}</td>
+          <td :class="item.missing.length ? 'audit-bad' : ''">{{ item.missing.length }}</td>
+          <td>{{ item.added }}</td>
+          <td>
+            <span class="badge" :class="item.consistent ? 'badge-ok' : 'badge-bad'">
+              {{ item.consistent ? '与快照一致' : '与快照不符' }}
+            </span>
+          </td>
+        </tr>
+        <tr v-if="!auditItems.length">
+          <td colspan="6" class="empty-state">暂无已留痕的测报方案</td>
+        </tr>
+      </tbody>
+    </table>
+
     <footer class="page-foot">
       <span>数据保存在本机浏览器里，换浏览器或清缓存会回到示例数据</span>
     </footer>
@@ -38,16 +63,27 @@
 import { onMounted, ref } from 'vue'
 
 import { loadOverview } from '@/api/local-service'
-import type { OverviewResult } from '@/data/types'
+import { auditInspectionAgainstSnapshots } from '@/api/plan-snapshot'
+import type { OverviewResult, SnapshotAuditItem } from '@/data/types'
 
 const cards = ref<OverviewResult['cards']>([])
 const moduleRows = ref<OverviewResult['modules']>([])
+const auditItems = ref<SnapshotAuditItem[]>([])
 
 function refresh() {
   const payload = loadOverview()
   cards.value = payload.cards
   moduleRows.value = payload.modules
+  auditItems.value = auditInspectionAgainstSnapshots()
 }
 
 onMounted(refresh)
 </script>
+
+<style scoped>
+.audit-title { font-size: 14px; margin: 18px 0 8px; }
+.audit-bad { color: #b42318; font-weight: 600; }
+.badge { border-radius: 999px; padding: 2px 8px; font-size: 12px; white-space: nowrap; }
+.badge-ok { background: #dcfce7; color: #15803d; }
+.badge-bad { background: #fee4e2; color: #b42318; }
+</style>

@@ -33,6 +33,55 @@
       <button class="btn ghost" type="button" @click="resetFilters">重置条件</button>
     </form>
 
+    <section class="snapshot-audit">
+      <h3 class="audit-title">巡检清单按测报方案快照核对</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>方案编号</th>
+            <th>最新快照时间</th>
+            <th>清单条数</th>
+            <th>被修改</th>
+            <th>已缺失</th>
+            <th>额外新增</th>
+            <th>核对结论</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in auditItems" :key="item.planId">
+            <td>{{ item.planCode }} {{ item.planName }}</td>
+            <td>{{ item.snapshotTime }}</td>
+            <td>{{ item.total }}</td>
+            <td>
+              <span :class="item.changed.length ? 'audit-bad' : 'audit-ok'">
+                {{ item.changed.length }}
+              </span>
+              <span v-if="item.changed.length" class="audit-detail">
+                （{{ item.changed.map((c) => `${c.code}:${c.detail}`).join('；') }}）
+              </span>
+            </td>
+            <td>
+              <span :class="item.missing.length ? 'audit-bad' : 'audit-ok'">
+                {{ item.missing.length }}
+              </span>
+              <span v-if="item.missing.length" class="audit-detail">
+                （{{ item.missing.map((m) => m.code).join('、') }}）
+              </span>
+            </td>
+            <td>{{ item.added }}</td>
+            <td>
+              <span class="badge" :class="item.consistent ? 'badge-ok' : 'badge-bad'">
+                {{ item.consistent ? '与快照一致' : '与快照不符' }}
+              </span>
+            </td>
+          </tr>
+          <tr v-if="!auditItems.length">
+            <td colspan="7" class="empty-state">暂无已留痕的测报方案，批准方案后即可核对</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <table class="data-table">
       <thead>
         <tr>
@@ -79,7 +128,8 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
-import type { EntryRow } from '@/data/types'
+import { auditInspectionAgainstSnapshots } from '@/api/plan-snapshot'
+import type { EntryRow, SnapshotAuditItem } from '@/data/types'
 
 const meta = moduleMeta('inspection')
 const columns = ["记录编号", "站点编号", "巡检日期", "巡检人员", "检查项目", "发现问题", "处理措施", "巡检状态"]
@@ -122,12 +172,16 @@ function runAction(action: string, row: EntryRow) {
   reload()
 }
 
+// 核对结果随巡检记录变化一起刷新；数据来自与方案页相同的快照存储通道。
+const auditItems = ref<SnapshotAuditItem[]>([])
+
 function reload() {
   errorMessage.value = ''
   try {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    auditItems.value = auditInspectionAgainstSnapshots()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '巡检记录列表读取失败'
   }
@@ -135,3 +189,14 @@ function reload() {
 
 onMounted(reload)
 </script>
+
+<style scoped>
+.snapshot-audit { margin-bottom: 14px; }
+.audit-title { font-size: 14px; margin: 0 0 8px; }
+.audit-bad { color: #b42318; font-weight: 600; }
+.audit-ok { color: #15803d; }
+.audit-detail { font-size: 12px; color: var(--muted); }
+.badge { border-radius: 999px; padding: 2px 8px; font-size: 12px; white-space: nowrap; }
+.badge-ok { background: #dcfce7; color: #15803d; }
+.badge-bad { background: #fee4e2; color: #b42318; }
+</style>
