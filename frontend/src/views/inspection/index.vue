@@ -33,11 +33,16 @@
       <button class="btn ghost" type="button" @click="resetFilters">重置条件</button>
     </form>
 
+    <p v-if="mismatchCount > 0" class="check-warning">
+      有 {{ mismatchCount }} 条巡检清单与方案快照不一致，请核对测报方案的测次安排。
+    </p>
+
     <table class="data-table">
       <thead>
         <tr>
           <th v-for="column in columns" :key="column">{{ column }}</th>
           <th>当前状态</th>
+          <th>方案快照核对</th>
           <th>可执行动作</th>
         </tr>
       </thead>
@@ -45,6 +50,11 @@
         <tr v-for="row in rows" :key="String(row.id)">
           <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
           <td>{{ row.status }}</td>
+          <td>
+            <span :class="['check-badge', planCheck(row) === '与方案快照一致' ? 'ok' : 'bad']">
+              {{ planCheck(row) }}
+            </span>
+          </td>
           <td class="row-actions">
             <button
               v-for="action in actions"
@@ -58,7 +68,7 @@
           </td>
         </tr>
         <tr v-if="!rows.length">
-          <td :colspan="columns.length + 2" class="empty-state">暂无巡检记录数据，可先登记巡检记录</td>
+          <td :colspan="columns.length + 3" class="empty-state">暂无巡检记录数据，可先登记巡检记录</td>
         </tr>
       </tbody>
     </table>
@@ -74,6 +84,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import {
+  checkInspectionRow,
   downloadEntries,
   listEntries,
   moduleMeta,
@@ -82,7 +93,7 @@ import {
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('inspection')
-const columns = ["记录编号", "站点编号", "巡检日期", "巡检人员", "检查项目", "发现问题", "处理措施", "巡检状态"]
+const columns = ["记录编号", "站点编号", "方案编号", "巡检日期", "巡检人员", "检查项目", "发现问题", "处理措施", "巡检状态"]
 const actions = ["完成巡检", "报告故障", "确认处置"]
 const statuses = ["待巡检", "已巡检", "发现故障", "已处置"]
 const stats = [{"label": "本月巡检次数", "value": 0}, {"label": "已巡检站点", "value": 0}, {"label": "待处置故障", "value": 0}]
@@ -97,6 +108,15 @@ const statusSummary = computed(() =>
     status,
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
+)
+
+// 其余页面的巡检清单要核对方案快照：逐条比对并汇总不一致条数。
+function planCheck(row: EntryRow): string {
+  return checkInspectionRow(row)
+}
+
+const mismatchCount = computed(
+  () => rows.value.filter((row) => checkInspectionRow(row) === '与方案快照不一致').length,
 )
 
 function resetFilters() {
